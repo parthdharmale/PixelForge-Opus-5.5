@@ -1,0 +1,31 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Georgia, 'Times New Roman', serif; color: #2b2118; background: #fbf7f1; line-height: 1.6; }
+a { color: inherit; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.site-header { position: sticky; top: 0; background: #fbf7f1; border-bottom: 1px solid #e6dccd; z-index: 10; }
+.nav { display: flex; justify-content: space-between; align-items: center; height: 64px; }
+.logo { font-weight: 700; font-size: 20px; text-decoration: none; }
+.nav-links { display: flex; gap: 24px; font-family: system-ui, sans-serif; font-size: 15px; }
+.nav-links a { text-decoration: none; color: #6b5a48; }
+.hero { padding: 96px 0; background: #2b2118; color: #fbf7f1; }
+.hero-inner { position: relative; }
+.kicker { text-transform: uppercase; letter-spacing: 0.12em; font: 600 12px system-ui, sans-serif; color: #d9a55b; margin: 0 0 12px; }
+.hero h1 { font-size: 52px; line-height: 1.1; margin: 0 0 16px; max-width: 620px; }
+.lede { font-size: 19px; max-width: 520px; color: #d8cbbb; margin: 0 0 28px; }
+.button { display: inline-block; padding: 12px 22px; background: #d9a55b; color: #2b2118; border-radius: 6px; text-decoration: none; font: 600 15px system-ui, sans-serif; }
+.stamp { position: absolute; right: 24px; top: 0; padding: 14px 18px; border: 2px solid #d9a55b; border-radius: 50%; color: #d9a55b; font: 600 13px system-ui, sans-serif; transform: rotate(12deg); }
+.beans { padding: 72px 0; }
+.beans h2, .visit h2 { font-size: 32px; margin: 0 0 24px; }
+.bean-list { display: flex; gap: 20px; }
+.bean { flex: 1; padding: 24px; background: #fff; border: 1px solid #e6dccd; border-radius: 10px; }
+.bean h3 { margin: 0 0 6px; font-size: 20px; }
+.bean p { margin: 0 0 16px; color: #6b5a48; }
+.price { font: 700 16px system-ui, sans-serif; }
+.visit { padding: 56px 0; background: #efe6d8; }
+.site-footer { padding: 24px 0; font: 13px system-ui, sans-serif; color: #8a7a68; }
+.story { padding: 64px 24px; }
+@media (max-width: 767px) {
+  .hero h1 { font-size: 36px; }
+  .bean-list { flex-direction: column; }
+  .stamp { display: none; }
+}

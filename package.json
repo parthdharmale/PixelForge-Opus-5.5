@@ -1,0 +1,28 @@
+{
+  "name": "pixelforge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Visual editor for existing websites: inspect, edit, generate source patches, verify visually.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "demo"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "start": "npm run build && NODE_ENV=production npm -w @pixelforge/server run start",
+    "build": "npm -w @pixelforge/agent run build && npm -w @pixelforge/editor run build",
+    "typecheck": "tsc -b --pretty",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "demo:reset": "node scripts/reset-demo.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

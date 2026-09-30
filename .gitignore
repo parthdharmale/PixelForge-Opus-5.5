@@ -1,0 +1,9 @@
+node_modules
+dist
+.pixelforge-work
+.pixelforge-data
+test-results
+playwright-report
+*.log
+.DS_Store
+packages/agent/dist

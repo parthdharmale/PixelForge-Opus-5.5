@@ -1,0 +1,54 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 640px;
+  padding: 24px;
+  border-radius: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.close {
+  background: none;
+  border: 0;
+  color: var(--color-muted);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.video {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  background: var(--color-bg);
+  color: var(--color-muted);
+}
+
+.caption {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--color-muted);
+}
