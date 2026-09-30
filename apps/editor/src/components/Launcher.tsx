@@ -10,7 +10,7 @@ export function Launcher() {
   const [devUrl, setDevUrl] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [fixtures, setFixtures] = useState<Array<{ name: string; path: string }>>([]);
+  const [fixtures, setFixtures] = useState<Array<{ name: string; path: string; url: string }>>([]);
   const [recent, setRecent] = useState<string[]>([]);
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export function Launcher() {
               Local fixtures:
               <div className="chips">
                 {fixtures.map((f) => (
-                  <button key={f.name} className="chip" onClick={() => run('url', () => openUrl(`${location.protocol}//${location.hostname}:4000${f.path}`))}>
+                  <button key={f.name} className="chip" onClick={() => run('url', () => openUrl(f.url))}>
                     {f.name}
                   </button>
                 ))}

@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { generateUrlPatch } from '@pixelforge/codegen';
 import type { AIRequest, EditState, PatchResult, VerificationReport } from '@pixelforge/core';
 import { defaultProvider, listProviders, planEdits } from './ai/index.ts';
-import { DATA_DIR, FIXTURES_DIR, HOST, PROXY_PORT } from './config.ts';
+import { API_PORT, DATA_DIR, FIXTURES_DIR, HOST, PROXY_PORT } from './config.ts';
 import { getJob, startJob } from './jobs.ts';
 import { htmlCache, rewriteHtml, validateTargetUrl } from './proxy.ts';
 import { applyPatch, generatePatch, getPatch, getProject, openProject, projectLogs, resetDemo, revertPatch, stopProject } from './projects/manager.ts';
@@ -46,7 +46,7 @@ export function createApi() {
         ? fs
             .readdirSync(FIXTURES_DIR, { withFileTypes: true })
             .filter((d) => d.isDirectory())
-            .map((d) => ({ name: d.name, path: `/fixtures/${d.name}/` }))
+            .map((d) => ({ name: d.name, path: `/fixtures/${d.name}/`, url: `http://localhost:${API_PORT}/fixtures/${d.name}/` }))
         : [],
     ),
   );

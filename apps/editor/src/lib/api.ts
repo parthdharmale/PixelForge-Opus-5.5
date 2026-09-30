@@ -13,7 +13,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 
 export const api = {
   health: () => req<{ ok: boolean; ai: { providers: AIProviderInfo[]; default: string } }>('GET', '/health'),
-  fixtures: () => req<Array<{ name: string; path: string }>>('GET', '/fixtures'),
+  fixtures: () => req<Array<{ name: string; path: string; url: string }>>('GET', '/fixtures'),
   openUrl: (url: string) => req<OpenUrlResponse>('POST', '/session/open', { url }),
   openProject: (body: { demo?: boolean; path?: string; devUrl?: string }) => req<ProjectStatus>('POST', '/projects', body),
   project: (id: string) => req<ProjectStatus & { logs: string[] }>('GET', `/projects/${id}`),

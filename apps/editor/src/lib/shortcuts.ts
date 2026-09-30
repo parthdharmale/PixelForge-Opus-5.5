@@ -3,6 +3,7 @@
  * forwarded by the agent, so shortcuts work wherever focus is.
  */
 import { editorBridge } from '../bridge/AgentBridge';
+import { generatePatch, selectNode } from '../state/controller';
 import { setStyles } from '../state/edits';
 import { useEditor } from '../state/store';
 
@@ -69,7 +70,7 @@ export function handleKey(k: KeyInput): boolean {
     return true;
   }
   if (mod && k.shift && key === 'g') {
-    void import('../state/controller').then((c) => c.generatePatch());
+    void generatePatch();
     return true;
   }
   if (key === 'Escape') {
@@ -77,7 +78,7 @@ export function handleKey(k: KeyInput): boolean {
     else if (s.ai.open) s.set({ ai: { ...s.ai, open: false } });
     else if (s.compare !== 'off') s.set({ compare: 'off' });
     else if (s.tool === 'interact') s.set({ tool: 'select' });
-    else if (s.selectedId) void import('../state/controller').then((c) => c.selectNode(null));
+    else if (s.selectedId) void selectNode(null);
     return true;
   }
   if (mod || k.alt) return false;
@@ -108,7 +109,7 @@ export function handleKey(k: KeyInput): boolean {
   if (!s.selectedId) return false;
   const { node, parent } = findNode(s.selectedId);
   const go = (id: number | undefined | null) => {
-    if (id) void import('../state/controller').then((c) => c.selectNode(id, { scroll: true }));
+    if (id) void selectNode(id, { scroll: true });
   };
   switch (key) {
     case 'ArrowUp':

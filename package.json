@@ -13,11 +13,10 @@
     "dev": "node scripts/dev.mjs",
     "start": "npm run build && NODE_ENV=production npm -w @pixelforge/server run start",
     "build": "npm -w @pixelforge/agent run build && npm -w @pixelforge/editor run build",
-    "typecheck": "tsc -b --pretty",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p apps/editor --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "demo:reset": "node scripts/reset-demo.mjs"
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

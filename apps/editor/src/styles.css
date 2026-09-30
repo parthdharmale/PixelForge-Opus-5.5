@@ -1494,3 +1494,6 @@ select.input {
   background: rgba(245, 184, 61, 0.18);
   color: var(--warn);
 }
+.launch-card > .btn:last-child {
+  margin-top: auto;
+}
