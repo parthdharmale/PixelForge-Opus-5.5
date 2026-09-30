@@ -136,6 +136,8 @@ export interface ContextNode {
   textEditable: boolean;
   styles: Record<string, string>;
   rect: { width: number; height: number };
+  /** Not rendered at the current viewport (display:none etc.). */
+  hidden?: boolean;
   children: ContextNode[];
 }
 

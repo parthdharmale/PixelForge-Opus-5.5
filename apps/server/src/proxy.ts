@@ -124,7 +124,7 @@ function errorPage(res: Response, status: number, title: string, detail: string)
   res
     .status(status)
     .type('html')
-    .send(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font:15px system-ui;background:#101218;color:#e6e8ee;display:grid;place-items:center;height:100vh;margin:0}.b{max-width:520px;padding:32px;border:1px solid #2a2f3b;border-radius:12px;background:#161a22}h1{font-size:18px;margin:0 0 8px}p{color:#9aa1b2;margin:0;line-height:1.5}</style></head><body><div class="b" data-pixelforge="error"><h1>${title}</h1><p>${detail}</p></div></body></html>`);
+    .send(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font:15px system-ui;background:#101218;color:#e6e8ee;display:grid;place-items:center;height:100vh;margin:0}.b{max-width:520px;padding:32px;border:1px solid #2a2f3b;border-radius:12px;background:#161a22}h1{font-size:18px;margin:0 0 8px}p{color:#9aa1b2;margin:0;line-height:1.5}</style></head><body><script src="/__pf/agent.js" data-pixelforge="agent"></script><div class="b" data-pixelforge="error"><h1>${title}</h1><p>${detail}</p></div></body></html>`);
 }
 
 export function createProxyApp() {

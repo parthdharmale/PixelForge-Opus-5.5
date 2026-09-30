@@ -212,3 +212,29 @@ export function stringify(root: Root): string {
   if (!out.endsWith('\n')) out += '\n';
   return out;
 }
+
+/** Longhands declared for `selector` inside width-based @media blocks. */
+export function mediaDeclaredProps(root: Root, selector: string): Set<string> {
+  const out = new Set<string>();
+  const sel = normSelector(selector);
+  root.walkAtRules('media', (a) => {
+    if (!/width/.test(a.params)) return;
+    a.walkRules((r) => {
+      if (normSelector(r.selector) === sel) declaredProps(r).forEach((p) => out.add(p));
+    });
+  });
+  return out;
+}
+
+/**
+ * Insert a new base rule right after `anchor` (a top-level rule), so it
+ * beats the anchor's declarations but still loses to any later @media
+ * overrides of the anchor — preserving the site's responsive behaviour.
+ */
+export function insertRuleAfter(anchor: Rule, selector: string, decls: Record<string, string>): Rule {
+  const rule = postcss.rule({ selector });
+  anchor.after(rule);
+  rule.raws.before = '\n\n';
+  setRuleDeclarations(rule, decls);
+  return rule;
+}

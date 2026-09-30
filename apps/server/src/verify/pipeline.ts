@@ -71,11 +71,13 @@ export async function captureAfter(
   url: string,
   before: Before[],
   job: JobHandle<VerificationReport>,
+  prepare?: (cp: CapturePage) => Promise<void>,
 ): Promise<Array<{ viewport: VerifyViewport; actual: Buffer; values: Array<string | null>; errors: string[] }>> {
   const out = [];
   for (const b of before) {
     const cp = await openPage(b.viewport.width, b.viewport.height);
     try {
+      await prepare?.(cp);
       let values: Array<string | null> = [];
       // The dev server may need a moment to pick up the written files.
       for (let attempt = 0; attempt < 5; attempt++) {
@@ -139,11 +141,11 @@ export function compare(jobId: string, patchId: string, before: Before[], after:
     worst === 'passed'
       ? nothingChanged
         ? 'Source matches the edit, but nothing changed visually (was the edit already in source?).'
-        : `The patched source renders exactly like the visual edit at ${viewports.length} viewport${viewports.length > 1 ? 's' : ''}.`
+        : `The generated code renders exactly like the visual edit at ${viewports.length} viewport${viewports.length > 1 ? 's' : ''}.`
       : worst === 'warning'
-        ? 'The patched source is visually very close to the edit; small differences remain (see highlighted regions).'
+        ? 'The generated code is visually very close to the edit; small differences remain (see highlighted regions).'
         : failedChecks.length
-          ? `${failedChecks.length} property check${failedChecks.length > 1 ? 's' : ''} failed: the source change does not produce the edited value everywhere.`
-          : 'The patched source differs from the visual edit in unexpected places (see highlighted regions).';
+          ? `${failedChecks.length} property check${failedChecks.length > 1 ? 's' : ''} failed: the generated code does not produce the edited value everywhere.`
+          : 'The generated code differs from the visual edit in unexpected places (see highlighted regions).';
   return { id: jobId, patchId, status: worst, summary, viewports, propertyChecks, consoleErrors: [...consoleErrors].slice(0, 20), durationMs: Date.now() - startedAt };
 }

@@ -13,7 +13,8 @@ Rules:
 - Consider the existing design (colors, fonts, spacing) and stay consistent with it.
 - Responsive: use breakpoint "base" for all widths, "tablet" for <=1023px, "mobile" for <=767px. The user is currently viewing the breakpoint given in the request; mobile-specific instructions should use "mobile".
 - For layout changes on repeated items (cards), change the container (display:grid, grid-template-columns, gap) rather than each child.
-- Elements with instanceCount > 1 are rendered from a shared component: styling them changes every instance.
+- Elements marked hidden are not displayed at the current viewport (display:none).
+- Elements with instanceCount > 1 are rendered from a shared component: styling them changes every instance on the page. If an element's instanceCount is larger than the number of times it appears in the snapshot, it is also used outside the selection; avoid changing it unless the instruction clearly asks for a site-wide change.
 - In "summary" state in one sentence what the plan does; in "rationale" give short bullet reasons.`;
 
 function compact(node: ContextNode): unknown {
@@ -24,6 +25,7 @@ function compact(node: ContextNode): unknown {
     ...(node.instanceCount > 1 ? { instanceCount: node.instanceCount } : {}),
     ...(node.text ? { text: node.text, textEditable: node.textEditable } : {}),
     size: `${node.rect.width}x${node.rect.height}`,
+    ...(node.hidden ? { hidden: true } : {}),
     styles: node.styles,
     ...(node.children.length ? { children: node.children.map(compact) } : {}),
   };

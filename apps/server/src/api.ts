@@ -7,7 +7,7 @@ import type { AIRequest, EditState, PatchResult, VerificationReport } from '@pix
 import { defaultProvider, listProviders, planEdits } from './ai/index.ts';
 import { DATA_DIR, FIXTURES_DIR, HOST, PROXY_PORT } from './config.ts';
 import { getJob, startJob } from './jobs.ts';
-import { htmlCache, validateTargetUrl } from './proxy.ts';
+import { htmlCache, rewriteHtml, validateTargetUrl } from './proxy.ts';
 import { applyPatch, generatePatch, getPatch, getProject, openProject, projectLogs, resetDemo, revertPatch, stopProject } from './projects/manager.ts';
 import { captureAfter, captureBefore, compare, DEFAULT_VIEWPORTS } from './verify/pipeline.ts';
 
@@ -65,6 +65,41 @@ export function createApi() {
       const patch: PatchResult = { id: crypto.randomBytes(6).toString('hex'), mode: 'url', createdAt: Date.now(), state, ...res };
       urlPatches.set(patch.id, patch);
       return patch;
+    }),
+  );
+
+  /**
+   * URL-mode verification: render the proxied page with the live edits
+   * (expected), then render it again from the *exported* patch — patched
+   * HTML plus the overrides stylesheet, served via request interception —
+   * and compare. This checks that the export reproduces the edit.
+   */
+  api.post(
+    '/url/verify',
+    wrap((req) => {
+      const patch = urlPatches.get(String(req.body.patchId));
+      if (!patch) throw Object.assign(new Error('Patch not found; regenerate it.'), { status: 404 });
+      const pageUrl = new URL(String(req.body.pageUrl));
+      const proxyOrigin = `http://localhost:${PROXY_PORT}`;
+      const openUrl = `${proxyOrigin}/__pf/open?url=${encodeURIComponent(pageUrl.href)}`;
+      const docUrl = `${proxyOrigin}${pageUrl.pathname}${pageUrl.search}`;
+      const html = patch.files.find((f) => f.path === 'index.html')?.after ?? htmlCache.get(pageUrl.href);
+      const css = patch.files.find((f) => f.path === 'pixelforge-overrides.css')?.after ?? '';
+      const job = startJob<VerificationReport>('verify', async (h) => {
+        const started = Date.now();
+        const before = await h.step('Render original and expected result', () => captureBefore(openUrl, patch.state, DEFAULT_VIEWPORTS));
+        const after = await h.step('Render the exported patch', () =>
+          captureAfter(docUrl, before, h, async (cp) => {
+            // Redirected requests are not interceptable: set the proxy's
+            // target cookie first, then load the document URL directly.
+            await cp.page.request.get(openUrl, { maxRedirects: 0 });
+            await cp.page.route(docUrl, (route) => (html ? route.fulfill({ status: 200, contentType: 'text/html', body: rewriteHtml(html, pageUrl.origin) }) : route.continue()));
+            await cp.page.route('**/pixelforge-overrides.css', (route) => route.fulfill({ status: 200, contentType: 'text/css', body: css }));
+          }),
+        );
+        return h.step('Compare renders', async () => compare(h.job.id, patch.id, before, after, started));
+      });
+      return { jobId: job.id };
     }),
   );
 

@@ -61,11 +61,14 @@ export function generateUrlPatch(state: EditState, html: string, pageUrl: string
   const files: FilePatch[] = [];
   if (css) {
     const sheet = `/* PixelForge overrides for ${pageUrl}\n * Generated from visual edits. Selectors were recorded from the live DOM;\n * move these rules into the site's own stylesheets where possible. */\n\n${css}\n`;
-    files.push({ path: 'pixelforge-overrides.css', before: '', after: sheet, diff: createTwoFilesPatch('/dev/null', 'b/pixelforge-overrides.css', '', sheet), created: true });
+    files.push({ path: 'pixelforge-overrides.css', before: '', after: sheet, diff: createTwoFilesPatch('/dev/null', 'b/pixelforge-overrides.css', '', sheet).replace(/^=+\n/m, ''), created: true });
     const link = '<link rel="stylesheet" href="pixelforge-overrides.css">';
-    after = /<\/head>/i.test(after) ? after.replace(/<\/head>/i, `  ${link}\n</head>`) : `${link}\n${after}`;
+    const own = /^([ \t]*)<\/head>/im.exec(after);
+    if (own) after = after.replace(/^([ \t]*)<\/head>/im, `${own[1]}  ${link}\n${own[1]}</head>`);
+    else if (/<\/head>/i.test(after)) after = after.replace(/<\/head>/i, `${link}</head>`);
+    else after = `${link}\n${after}`;
   }
-  if (after !== html) files.unshift({ path: 'index.html', before: html, after, diff: createTwoFilesPatch('a/index.html', 'b/index.html', html, after), created: false });
+  if (after !== html) files.unshift({ path: 'index.html', before: html, after, diff: createTwoFilesPatch('a/index.html', 'b/index.html', html, after).replace(/^=+\n/m, ''), created: false });
   for (const m of mappings) if (m.status !== 'mapped' && m.message) warnings.push(`${m.label}: ${m.message}`);
   return { files, mappings, warnings };
 }

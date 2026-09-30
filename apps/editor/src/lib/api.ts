@@ -22,6 +22,7 @@ export const api = {
   codegenUrl: (pageUrl: string, state: EditState) => req<PatchResult>('POST', '/url/codegen', { pageUrl, state }),
   apply: (id: string, patchId: string, verify: boolean, pagePath: string, viewports?: VerifyViewport[]) =>
     req<{ jobId?: string; files?: string[] }>('POST', `/projects/${id}/apply`, { patchId, verify, pagePath, viewports }),
+  verifyUrl: (patchId: string, pageUrl: string) => req<{ jobId: string }>('POST', '/url/verify', { patchId, pageUrl }),
   revert: (id: string, patchId: string) => req<{ files: string[] }>('POST', `/projects/${id}/revert`, { patchId }),
   job: (id: string) => req<Job<VerificationReport>>('GET', `/jobs/${id}`),
   aiPlan: (request: AIRequest, provider?: string) => req<AIPlan>('POST', '/ai/plan', { request, provider }),

@@ -48,6 +48,10 @@ test.describe('URL mode (proxied public page)', () => {
     await expect(panel).toContainText('pixelforge-overrides.css');
     await expect(panel).toContainText('@media (max-width: 767px)');
     await expect(panel).toContainText('Coffee worth the wait');
+    // The exported patch (patched HTML + overrides CSS) must reproduce the edit.
+    await page.getByTestId('verify-export').click();
+    await expect(page.getByTestId('verify-summary')).toContainText('Verified', { timeout: 90_000 });
+    await expect(page.getByTestId('verify-viewport')).toHaveCount(3);
 
     await page.getByTestId('compare-slider').click();
     await expect(page.getByTestId('original-frame')).toBeVisible();

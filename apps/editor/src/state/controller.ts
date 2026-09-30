@@ -269,7 +269,7 @@ export async function runAI(instruction: string) {
   if (!nodeId) return;
   s.set({ ai: { ...s.ai, instruction, loading: true, error: null, plan: null, ops: [], rejected: [], excluded: [] } });
   try {
-    const context = await editorBridge.call('getContext', { nodeId, depth: 5 });
+    const context = await editorBridge.call('getContext', { nodeId, depth: 6 });
     if (!context) throw new Error('Selected element is no longer on the page');
     const plan = await api.aiPlan(
       {
@@ -355,20 +355,38 @@ export async function applyPatch(verify: boolean) {
       get().toast('success', `Patched ${res.files?.length ?? 0} file(s); the dev server is reloading.`);
       return;
     }
-    get().set({ bottomTab: 'verify' });
-    let job = await api.job(res.jobId);
-    while (job.status === 'running') {
-      get().set({ patch: { ...get().patch, job } });
-      await new Promise((r) => setTimeout(r, 600));
-      job = await api.job(res.jobId);
-    }
-    get().set({ patch: { ...get().patch, job, loading: false } });
-    if (job.status === 'error') get().toast('error', `Verification failed: ${job.error}`);
-    else if (job.result?.status === 'passed') get().toast('success', 'Verified: the source change reproduces your edit.');
-    else get().toast('info', 'Verification finished with differences — review the Verify tab.');
+    await pollVerification(res.jobId, 'the source change reproduces your edit');
   } catch (e) {
     get().set({ patch: { ...get().patch, loading: false, error: (e as Error).message } });
     get().toast('error', (e as Error).message);
+  }
+}
+
+async function pollVerification(jobId: string, successText: string) {
+  get().set({ bottomTab: 'verify' });
+  let job = await api.job(jobId);
+  while (job.status === 'running') {
+    get().set({ patch: { ...get().patch, job } });
+    await new Promise((r) => setTimeout(r, 600));
+    job = await api.job(jobId);
+  }
+  get().set({ patch: { ...get().patch, job, loading: false } });
+  if (job.status === 'error') get().toast('error', `Verification failed: ${job.error}`);
+  else if (job.result?.status === 'passed') get().toast('success', `Verified: ${successText}.`);
+  else get().toast('info', 'Verification finished with differences — review the Verify tab.');
+}
+
+/** URL mode: check that the exported overrides + HTML patch reproduce the edit. */
+export async function verifyUrlExport() {
+  const s = get();
+  const result = s.patch.result;
+  if (!result || s.session?.mode !== 'url') return;
+  s.set({ patch: { ...s.patch, loading: true, error: null, job: null } });
+  try {
+    const { jobId } = await api.verifyUrl(result.id, currentPageUrl());
+    await pollVerification(jobId, 'the exported patch reproduces your edit');
+  } catch (e) {
+    get().set({ patch: { ...get().patch, loading: false, error: (e as Error).message } });
   }
 }
 

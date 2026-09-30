@@ -17,6 +17,7 @@ import {
   BREAKPOINT_ORDER,
   compressDeclarations,
   formatSourceLoc,
+  SHORTHANDS,
   type BreakpointId,
   type ChangeMapping,
   type EditState,
@@ -24,7 +25,7 @@ import {
   type FilePatch,
   type MappingStrategy,
 } from '@pixelforge/core';
-import { declaredProps, findBaseRule, setDeclarations } from './css.ts';
+import { declaredProps, findBaseRule, insertRuleAfter, mediaDeclaredProps, setDeclarations } from './css.ts';
 import {
   analyzeClassName,
   camelCase,
@@ -113,11 +114,27 @@ export function generateSourcePatch(state: EditState, project: ProjectAccess, op
     if (hasStyles && target.scope === 'instance' && target.instanceCount > 1) {
       mappings.push({ ...base, strategy: null, file: target.src.file, detail: loc, status: 'unmapped', message: `This element is one of ${target.instanceCount} instances rendered from the same JSX (e.g. an array map). An instance-only style cannot be expressed in the shared source; switch the edit to "all instances".` });
     } else if (hasStyles) {
+      const inlineProps = inlineStyleProps(ctx.opening);
       for (const bp of BREAKPOINT_ORDER) {
-        const decls = styles[bp];
-        if (!decls || !Object.keys(decls).length) continue;
+        const all = styles[bp];
+        if (!all || !Object.keys(all).length) continue;
+        const propsLabel = (d: Record<string, string>) => Object.keys(d).map((p) => (bp === 'base' ? p : `${p} @${bp}`));
+        // Properties already set by the element's inline style object can
+        // only be changed there (inline beats every class rule).
+        const inlineDecls = Object.fromEntries(Object.entries(all).filter(([p]) => inlineProps.has(p)));
+        let decls = Object.fromEntries(Object.entries(all).filter(([p]) => !inlineProps.has(p)));
+        if (Object.keys(inlineDecls).length) {
+          if (bp === 'base') {
+            Object.assign(ctx.inlineStyle, inlineDecls);
+            mappings.push({ ...base, properties: propsLabel(inlineDecls), strategy: 'inline-style', file: ws.rel(ctx.file.abs), detail: `existing style={{ ${Object.keys(inlineDecls).map(camelCase).join(', ')} }}`, status: 'mapped' });
+          } else {
+            decls = { ...decls, ...Object.fromEntries(Object.entries(inlineDecls).map(([p, v]) => [p, `${v} !important`])) };
+            mappings.push({ ...base, properties: propsLabel(inlineDecls), strategy: null, file: ws.rel(ctx.file.abs), detail: '!important', status: 'warning', message: `${Object.keys(inlineDecls).join(', ')} ${Object.keys(inlineDecls).length > 1 ? 'are' : 'is'} set by an inline style, which beats stylesheet rules; the breakpoint rule uses !important. Consider moving the inline style into a class.` });
+          }
+        }
+        if (!Object.keys(decls).length) continue;
         const res = applyStyles(ws, ctx, bp, decls, { globalCss, classUsage, shared: !!opts.sharedClass?.[key] });
-        mappings.push({ ...base, properties: Object.keys(decls).map((p) => (bp === 'base' ? p : `${p} @${bp}`)), ...res });
+        mappings.push({ ...base, properties: propsLabel(decls).map((l) => l.replace(' !important', '')), ...res });
       }
       flushElement(ctx);
     }
@@ -223,8 +240,23 @@ function applyStyles(ws: Workspace, ctx: ElementCtx, bp: BreakpointId, decls: Re
     });
   }
 
-  // 4. Inline style for base edits.
+  // 4. Base edits. If one of the element's classes has width-based @media
+  // overrides for an edited property, an inline style would clobber the
+  // site's responsive rules; add a scoped class right after that class's
+  // base rule instead, so the @media overrides keep winning.
   if (bp === 'base') {
+    const anchor = responsiveAnchor(ws, ctx, env.globalCss, props);
+    if (anchor) {
+      const name = scopedClassName(ctx);
+      const root = ws.css(anchor.file)!;
+      const rule = findBaseRule(root, anchor.selector)!;
+      const isModule = /\.module\.css$/.test(anchor.file);
+      const cls = isModule ? name : name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+      insertRuleAfter(rule, `.${cls}`, decls);
+      if (isModule) ctx.addModuleClass = `${anchor.binding}.${cls}`;
+      else ctx.addGlobalClass = cls;
+      return withShared({ strategy: isModule ? 'css-module' : 'css-rule', file: ws.rel(anchor.file), detail: `new class .${cls} after ${anchor.selector} (keeps its @media overrides)`, status: 'mapped' });
+    }
     Object.assign(ctx.inlineStyle, decls);
     return withShared({ strategy: 'inline-style', file: ws.rel(ctx.file.abs), detail: `style={{ ${Object.keys(decls).map(camelCase).join(', ')} }}`, status: 'mapped' });
   }
@@ -240,14 +272,44 @@ function applyStyles(ws: Workspace, ctx: ElementCtx, bp: BreakpointId, decls: Re
     return withShared({ strategy: 'css-module', file: ws.rel(cssAbs), detail: `new class .${name}${bpNote}`, status: 'mapped' });
   }
   const globalFile = env.globalCss[0];
-  if (globalFile && (!ctx.cls.attr || ctx.cls.literal)) {
+  if (globalFile) {
     const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
     const root = ws.css(globalFile)!;
     setDeclarations(root, `.${kebab}`, bp, decls);
     ctx.addGlobalClass = kebab;
     return withShared({ strategy: 'css-rule', file: ws.rel(globalFile), detail: `new class .${kebab}${bpNote}`, status: 'mapped' });
   }
-  return { strategy: null, file: ws.rel(ctx.file.abs), detail: 'no stylesheet', status: 'unmapped', message: 'Breakpoint-specific styles need a stylesheet or Tailwind; this element has neither.' };
+  return { strategy: null, file: ws.rel(ctx.file.abs), detail: 'no stylesheet', status: 'unmapped', message: 'Breakpoint-specific styles need a stylesheet or Tailwind; this project has neither.' };
+}
+
+/** A base rule of one of the element's classes that has @media overrides for `props`. */
+function responsiveAnchor(ws: Workspace, ctx: ElementCtx, globalCss: string[], props: Set<string>): { file: string; selector: string; binding: string } | null {
+  const candidates: Array<{ file: string; selector: string; binding: string }> = [];
+  for (const ref of ctx.cls.moduleRefs.filter((r) => !r.conditional)) candidates.push({ file: ctx.modules[ref.binding], selector: `.${ref.className}`, binding: ref.binding });
+  for (const c of ctx.cls.staticClasses.filter((x) => !x.conditional && !propsOfUtility(x.name).length)) {
+    for (const f of globalCss) candidates.push({ file: f, selector: `.${c.name}`, binding: '' });
+  }
+  for (const c of candidates) {
+    const root = ws.peekCss(c.file);
+    if (!root || !findBaseRule(root, c.selector)) continue;
+    const media = mediaDeclaredProps(root, c.selector);
+    if ([...props].some((p) => media.has(p))) return c;
+  }
+  return null;
+}
+
+/** Longhands set by the element's `style={{...}}` object literal. */
+function inlineStyleProps(opening: AnyNode): Set<string> {
+  const out = new Set<string>();
+  const attr = getAttr(opening, 'style');
+  const obj = attr?.value?.type === 'JSXExpressionContainer' && attr.value.expression.type === 'ObjectExpression' ? attr.value.expression : null;
+  for (const p of obj?.properties ?? []) {
+    if (p.type !== 'ObjectProperty' || p.computed) continue;
+    const kebab = String(p.key.name ?? p.key.value).replace(/[A-Z]/g, (c: string) => `-${c.toLowerCase()}`);
+    out.add(kebab);
+    for (const l of SHORTHANDS[kebab] ?? []) out.add(l);
+  }
+  return out;
 }
 
 /** Longhands declared by unlayered rules targeting any of `classes`. */
@@ -316,9 +378,12 @@ function flushElement(ctx: ElementCtx) {
       if (tpl.quasis.length > 1 && content) content = ` ${content}`;
       if (last.end > last.start) ms.overwrite(last.start, last.end, content);
       else if (content) ms.appendLeft(last.start, content);
-    } else if (attr.value?.type === 'JSXExpressionContainer' && moduleExpr) {
+    } else if (attr.value?.type === 'JSXExpressionContainer' && (moduleExpr || ctx.addGlobalClass)) {
+      // className={someVariable}: extend it locally rather than editing a
+      // variable that other elements may share.
       const ex = attr.value.expression;
-      ms.overwrite(attr.value.start, attr.value.end, `{\`\${${code.slice(ex.start, ex.end)}} \${${moduleExpr}}\`}`);
+      const extra = [ctx.addGlobalClass, moduleExpr ? `\${${moduleExpr}}` : null].filter(Boolean).join(' ');
+      ms.overwrite(attr.value.start, attr.value.end, `{\`\${${code.slice(ex.start, ex.end)}} ${extra}\`}`);
     }
   }
 

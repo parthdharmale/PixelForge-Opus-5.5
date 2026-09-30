@@ -62,7 +62,7 @@ const CONTEXT_PROPS = [
 ];
 
 /** Compact subtree snapshot for AI providers (bounded size). */
-export function buildContext(root: Element, maxDepth = 4, maxNodes = 80): ContextNode {
+export function buildContext(root: Element, maxDepth = 4, maxNodes = 160): ContextNode {
   let n = 0;
   const counts = srcCounts();
   const visit = (el: Element, depth: number, parentStyles: Record<string, string> | null): ContextNode => {
@@ -93,12 +93,15 @@ export function buildContext(root: Element, maxDepth = 4, maxNodes = 80): Contex
       textEditable: isTextEditable(el).editable,
       styles,
       rect: { width: Math.round(r.width), height: Math.round(r.height) },
+      ...(cs.display === 'none' ? { hidden: true, styles: { ...styles, display: 'none' } } : {}),
       children: [],
     };
     const full = { ...(parentStyles ?? {}), ...styles };
     for (const k of kids) {
       if (n >= maxNodes) break;
-      if (k.getClientRects().length === 0) continue;
+      // Hidden elements are included (flagged) so the AI can reveal them,
+      // e.g. navigation links collapsed behind a menu on mobile.
+      if (cs.display !== 'none' && k.getClientRects().length === 0 && getComputedStyle(k).display !== 'none') continue;
       node.children.push(visit(k, depth + 1, full));
     }
     return node;

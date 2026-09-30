@@ -15,7 +15,7 @@ import {
   type ViewportVerification,
 } from '@pixelforge/core';
 import { editorBridge } from '../bridge/AgentBridge';
-import { applyPatch, generatePatch, resetDemoProject, revertAppliedPatch, selectNode } from '../state/controller';
+import { applyPatch, generatePatch, resetDemoProject, revertAppliedPatch, selectNode, verifyUrlExport } from '../state/controller';
 import { useEditor, type BottomTab } from '../state/store';
 
 function selectTarget(t: ElementTarget) {
@@ -280,6 +280,11 @@ function CodePanel() {
             <Download size={12} /> CSS
           </button>
         )}
+        {session?.mode === 'url' && (
+          <button className="btn sm primary" disabled={patch.loading || !!stale || !result.files.length} onClick={verifyUrlExport} data-testid="verify-export" title="Render the page from the exported patch and compare it with your edit">
+            {patch.loading ? <span className="spinner" /> : <ShieldCheck size={12} />} Verify export
+          </button>
+        )}
         {session?.mode === 'source' && (
           <>
             <button className="btn sm" disabled={patch.loading || !!stale || !result.files.length} onClick={() => applyPatch(false)} title="Write files without verification">
@@ -363,7 +368,11 @@ function VerifyPanel() {
       <div className="empty">
         <ShieldCheck size={22} />
         <h4>Visual verification</h4>
-        <p>After “Apply &amp; verify”, PixelForge renders the original, your live edit and the reloaded patched source at desktop, tablet and mobile widths and compares them pixel by pixel.</p>
+        <p>
+          {session?.mode === 'url'
+            ? 'After “Verify export”, PixelForge renders the page from the exported patch (patched HTML + overrides stylesheet) and compares it with your live edit at desktop, tablet and mobile widths.'
+            : 'After “Apply & verify”, PixelForge renders the original, your live edit and the reloaded patched source at desktop, tablet and mobile widths and compares them pixel by pixel.'}
+        </p>
         {session?.project?.isDemo && (
           <button className="btn sm" onClick={resetDemoProject}>
             <Undo2 size={12} /> Reset demo source

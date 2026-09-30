@@ -102,9 +102,27 @@ function isCardLike(n: ContextNode): boolean {
 class Plan {
   ops: AIProposedOp[] = [];
   rationale: string[] = [];
+  skippedShared = new Set<string>();
   private seen = new Set<string>();
 
+  constructor(private occurrences: Map<string, number>) {}
+
+  /**
+   * Elements rendered from a shared component that also appears outside
+   * the selection would change everywhere; leave them alone so the edit
+   * stays within what the user selected.
+   */
+  private sharedOutside(n: ContextNode): boolean {
+    const key = n.src ?? n.groupSelector;
+    const total = n.src ? n.instanceCount : n.groupCount ?? 1;
+    return !!key && total > (this.occurrences.get(key) ?? 1);
+  }
+
   set(n: ContextNode, property: string, value: string, reason: string, breakpoint: BreakpointId = 'base') {
+    if (this.sharedOutside(n)) {
+      this.skippedShared.add(n.label);
+      return;
+    }
     const k = `${n.ref}|${property}|${breakpoint}`;
     if (this.seen.has(k)) return;
     const current = n.styles[property];
@@ -168,23 +186,29 @@ const RECIPES: Recipe[] = [
     name: 'mobile-nav',
     match: /(mobile|phone|small screen).*(nav|menu|header)|(nav|menu|header).*(mobile|phone|small screen)/i,
     apply(p, env) {
-      const lists = env.nodes.filter((n) => n.children.length >= 3 && n.children.every((c) => ['li', 'a'].includes(c.tag)));
-      const bar = env.nodes.find((n) => n.styles.display === 'flex' && n.children.length >= 2) ?? env.root;
+      const isList = (n: ContextNode) => n.children.length >= 3 && n.children.every((c) => ['li', 'a'].includes(c.tag));
+      const lists = env.nodes.filter(isList);
+      const bar = env.nodes.find((n) => n.styles.display === 'flex' && n.children.length >= 2 && !isList(n)) ?? env.root;
       p.set(bar, 'flex-wrap', 'wrap', 'Let the bar wrap instead of overflowing on narrow screens', 'mobile');
-      p.set(bar, 'row-gap', '8px', 'Breathing room between wrapped rows', 'mobile');
+      p.set(bar, 'row-gap', '4px', 'Tight spacing between the wrapped rows', 'mobile');
+      if (px(bar.styles.height)) {
+        p.set(bar, 'height', 'auto', 'Allow the bar to grow for the second row', 'mobile');
+        p.set(bar, 'min-height', bar.styles.height, 'Keep the original bar height for the first row', 'mobile');
+      }
       for (const list of lists) {
-        p.set(list, 'display', 'flex', 'Keep navigation links visible on mobile', 'mobile');
+        p.set(list, 'display', 'flex', list.hidden ? 'Links were hidden behind a menu; show them directly' : 'Keep links visible', 'mobile');
         p.set(list, 'order', '3', 'Move links to their own row below the logo and actions', 'mobile');
         p.set(list, 'width', '100%', 'Full-width row for links', 'mobile');
         p.set(list, 'overflow-x', 'auto', 'Swipe horizontally when links do not fit', 'mobile');
-        p.set(list, 'column-gap', '20px', 'Comfortable spacing for touch', 'mobile');
+        p.set(list, 'column-gap', '20px', 'Comfortable spacing between touch targets', 'mobile');
         p.set(list, 'white-space', 'nowrap', 'Keep each link on one line', 'mobile');
-        p.set(list, 'padding-bottom', '8px', 'Space below the scrolling row', 'mobile');
+        p.set(list, 'padding-bottom', '10px', 'Space below the scrolling row', 'mobile');
       }
-      const header = env.nodes.find((n) => (px(n.styles.height) ?? 0) > 0 && n.styles.display === 'flex');
-      if (header && px(header.styles.height)) p.set(header, 'height', 'auto', 'Allow the header to grow for the wrapped row', 'mobile');
-      for (const n of env.nodes) if (n.tag === 'a' && n.text && fontSize(n) < 16) p.set(n, 'font-size', '16px', 'Readable, tappable link text (≥16px)', 'mobile');
-      p.why('On mobile the navigation wraps: brand and actions stay on top, links move to a swipeable row with touch-friendly sizing.');
+      // A hamburger toggle becomes redundant once the links are visible.
+      const toggle = env.nodes.find((n) => n.tag === 'button' && !n.text && n.children.length <= 4 && n.children.every((c) => !c.text));
+      if (toggle && lists.length) p.set(toggle, 'display', 'none', 'The menu toggle is redundant with visible links', 'mobile');
+      for (const n of env.nodes) if (n.tag === 'a' && n.text && fontSize(n) < 16 && !n.hidden) p.set(n, 'font-size', '16px', 'Readable, tappable link text (≥16px)', 'mobile');
+      p.why('On mobile the navigation wraps: brand and actions stay on top, links move to a swipeable row with touch-friendly sizing, and the redundant menu toggle is hidden.');
     },
   },
   {
@@ -384,7 +408,12 @@ export class HeuristicProvider implements AIProvider {
     const bgNode = nodes.map((n) => parseColor(n.styles['background-color'])).find((c) => c && c.a > 0.5);
     const bg = bgNode ?? (dark ? { r: 11, g: 13, b: 18, a: 1 } : { r: 255, g: 255, b: 255, a: 1 });
     const env: Env = { root: req.context, nodes, dark, text, bg, bp: req.viewport.breakpoint };
-    const plan = new Plan();
+    const occurrences = new Map<string, number>();
+    for (const n of nodes) {
+      const key = n.src ?? n.groupSelector;
+      if (key) occurrences.set(key, (occurrences.get(key) ?? 0) + 1);
+    }
+    const plan = new Plan(occurrences);
     const matched: string[] = [];
     for (const r of RECIPES) {
       if (!r.match.test(req.instruction)) continue;
@@ -402,6 +431,7 @@ export class HeuristicProvider implements AIProvider {
       matched.push('color');
     }
     const warnings: string[] = [];
+    if (plan.skippedShared.size) plan.why(`Left ${[...plan.skippedShared].join(', ')} unchanged: ${plan.skippedShared.size > 1 ? 'they are' : 'it is'} rendered by a shared component that also appears outside this selection (edit it directly to change it everywhere).`);
     if (!matched.length || !plan.ops.length) {
       warnings.push('The offline engine did not recognise an actionable intent in this instruction. It understands: premium, developer-tool style, reduce clutter, hierarchy, responsive grid, mobile navigation, more/less spacing, bigger/smaller, rounded, center, bold, shadow, hide, and colours. Set ANTHROPIC_API_KEY for open-ended instructions.');
     }

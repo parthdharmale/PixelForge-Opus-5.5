@@ -78,11 +78,28 @@ describe('global CSS strategy', () => {
     expect(res.files[0].after).toContain('letter-spacing: -0.04em;');
   });
 
-  it('falls back to inline style when Tailwind utilities would lose to an unlayered rule', () => {
+  it('adds a scoped class after a shared rule so its @media overrides keep winning', () => {
+    // .section is shared and has tablet/mobile padding overrides: an inline
+    // style would break them, so a new class is inserted right after .section.
     const t = target(locate('src/components/Features.tsx', '<section className="section"'));
     const res = patchFor([style(t, 'padding-top', '120px')]);
-    expect(res.mappings[0].strategy).toBe('inline-style');
-    expect(res.files[0].after).toContain('<section className="section" id="features" style={{ paddingTop: 120 }}>');
+    expect(res.mappings[0]).toMatchObject({ strategy: 'css-rule', file: 'src/styles/global.css' });
+    const css = res.files.find((f) => f.path.endsWith('global.css'))!.after;
+    expect(css).toContain('.section {\n  padding: 96px 0;\n}\n\n.features-section {\n  padding-top: 120px;\n}\n\n.section-heading');
+    const tsx = res.files.find((f) => f.path.endsWith('Features.tsx'))!.after;
+    expect(tsx).toContain('<section className="section features-section" id="features">');
+  });
+
+  it('extends a variable className locally for breakpoint edits (shared Button component)', () => {
+    const t = target(locate('src/components/Button.tsx', '<a className'), 'a.btn', 5);
+    const res = patchFor([style(t, 'font-size', '16px', 'mobile')]);
+    expect(res.mappings[0]).toMatchObject({ strategy: 'css-rule', status: 'warning' });
+    const tsx = res.files.find((f) => f.path.endsWith('Button.tsx'))!.after;
+    expect(tsx).toContain('<a className={`${className} button-btn`} href={href}>');
+    // The <button> branch keeps the untouched variable.
+    expect(tsx).toContain('<button className={className}');
+    const css = res.files.find((f) => f.path.endsWith('global.css'))!.after;
+    expect(css).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.button-btn \{\n    font-size: 16px;/);
   });
 });
 
@@ -108,11 +125,21 @@ describe('Tailwind strategy', () => {
 });
 
 describe('inline style strategy', () => {
-  it('merges into an existing style object keeping numeric px values', () => {
+  it('edits properties owned by an existing style object in place (inline beats classes)', () => {
     const t = target(locate('src/components/Hero.tsx', '<dl'));
-    const res = patchFor([style(t, 'column-gap', '64px'), style(t, 'row-gap', '64px')], {});
-    // dl has a module class (.stats) without a rule: a rule is created in the module instead.
-    expect(res.mappings[0]).toMatchObject({ strategy: 'css-module', detail: '.stats (new rule)' });
+    const res = patchFor([style(t, 'column-gap', '64px'), style(t, 'row-gap', '64px'), style(t, 'padding-top', '8px')]);
+    expect(res.mappings.map((m) => m.strategy)).toEqual(['inline-style', 'css-module']);
+    const tsx = res.files.find((f) => f.path.endsWith('Hero.tsx'))!.after;
+    expect(tsx).toContain("style={{ display: 'flex', gap: 64, marginTop: 48 }}");
+    // The remaining property goes to the element's module class.
+    expect(res.files.find((f) => f.path.endsWith('Hero.module.css'))!.after).toContain('.stats {\n  padding-top: 8px;\n}');
+  });
+
+  it('uses !important (with a warning) for breakpoint edits of inline-styled properties', () => {
+    const t = target(locate('src/components/Hero.tsx', '<dl'));
+    const res = patchFor([style(t, 'margin-top', '24px', 'mobile')]);
+    expect(res.mappings[0]).toMatchObject({ status: 'warning', detail: '!important' });
+    expect(res.files[0].after).toMatch(/\.stats \{\n    margin-top: 24px !important;/);
   });
 
   it('adds inline styles to elements without classes', () => {
